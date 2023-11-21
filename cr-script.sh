@@ -11,10 +11,23 @@
 
 IMG_URL="gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable"
 WISH_TO_CONTINUE="Do you wish to continue? (y/N): "
-WELCOME_TEXT=\
-"Please input the following information to set up your tagging server. For more
-information about the configuration, input '?'. To use the recommended setting
-or your current setting, leave blank."
+
+# New Plan Selection Section
+PLAN_SELECTION_TEXT=\
+"Choose a deployment plan:
+  A - Basic (Min 1, Max 2 Instances)
+  B - Standard (Min 2, Max 3 Instances)
+  C - Advanced (Min 3, Max 4 Instances)
+  Custom - Custom configuration
+Enter A, B, C, or Custom: "
+
+# Default values for plans A, B, C
+DEFAULT_REGION="europe-west4"
+DEFAULT_MEMORY="512Mi"
+DEFAULT_CPU="allocated during request processing" # Assuming this is a comment or handled elsewhere in the script
+DEFAULT_REQUEST_TIMEOUT="300"
+DEFAULT_MAX_CONCURRENT_REQUESTS="80"
+
 SERVICE_PREFIX_HELP=\
 "  Provide a name for the Cloud Run service you wish to use for this deployment.
   The name will be suffixed with -prod and -debug for production and debug services,
@@ -264,6 +277,77 @@ prompt_continue_default_no() {
   done
 }
 
+prompt_container_config
+prompt_policy_script_url
+echo "Container Config: ${container_config}"
+echo "Policy Script URL: ${policy_script_url}"
+
+choose_plan() {
+  echo "$PLAN_SELECTION_TEXT"
+  read plan_choice
+  plan_choice=$(echo "$plan_choice" | tr '[:upper:]' '[:lower:]')
+
+  case $plan_choice in
+    a)
+      min_instances=1
+      max_instances=2
+      ;;
+    b)
+      min_instances=2
+      max_instances=3
+      ;;
+    c)
+      min_instances=3
+      max_instances=4
+      ;;
+    custom)
+      # Custom configuration; values will be prompted later
+
+      ;;
+    *)
+      echo "Invalid selection. Please enter A, B, C, or Custom."
+      choose_plan # Re-prompt if invalid input
+      ;;
+  esac
+}
+
+# Call the function to choose the plan
+choose_plan
+
+choose_custom_params() {
+    prompt_service_prefix
+    prompt_existing_service
+    prompt_memory
+    prompt_cpu_limit
+    prompt_min_instances
+    prompt_max_instances
+
+    echo ""
+    echo "Your configured settings are"
+    echo "Service Name: ${service_prefix}"
+    echo "Memory Per Instance: ${memory_limit}"
+    echo "CPU Allocation Per Instance: ${cpu_limit}"
+    echo "Minimum Number of Servers: ${min_instances}"
+    echo "Maximum Number of Servers: ${max_instances}"
+    if [[ ! -z ${cur_region} ]]; then
+      echo "Region: ${cur_region}"
+    fi
+}
+
+# Set default values or call choose_custom_params based on the selected plan
+if [[ "$plan_choice" == "custom" ]]; then
+    choose_custom_params
+else
+    service_prefix="gtm-server"
+    region=$DEFAULT_REGION
+    memory_limit=$DEFAULT_MEMORY
+    cpu_limit=$DEFAULT_CPU
+    request_timeout=$DEFAULT_REQUEST_TIMEOUT
+    max_concurrent_requests=$DEFAULT_MAX_CONCURRENT_REQUESTS
+    # Assign the region and other variables here for non-custom plans
+fi
+
+
 deploy_production_server() {
   if [[ "${policy_script_url}" == "''" ]]; then
     policy_script_url=""
@@ -289,31 +373,6 @@ deploy_debug_server() {
     --set-env-vars CONTAINER_CONFIG=${container_config} --format=json | jq -r '.status.url')
   deploy_production_server
 }
-
-echo "${WELCOME_TEXT}"
-prompt_service_prefix
-prompt_existing_service
-prompt_container_config
-prompt_policy_script_url
-prompt_memory
-prompt_cpu_limit
-prompt_min_instances
-prompt_max_instances
-
-echo ""
-echo "Your configured settings are"
-echo "Service Name: ${service_prefix}"
-echo "Container Config: ${container_config}"
-echo "Policy Script URL: ${policy_script_url}"
-echo "Memory Per Instance: ${memory_limit}"
-echo "CPU Allocation Per Instance: ${cpu_limit}"
-echo "Minimum Number of Servers: ${min_instances}"
-echo "Maximum Number of Servers: ${max_instances}"
-if [[ ! -z ${cur_region} ]]; then
-  echo "Region: ${cur_region}"
-fi
-
-prompt_continue_default_no "${WISH_TO_CONTINUE}"
 
 if [[ "${container_config}" == "${cur_container_config}" &&
   "${policy_script_url}" == "${cur_policy_script_url}" &&

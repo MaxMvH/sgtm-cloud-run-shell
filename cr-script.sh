@@ -386,23 +386,25 @@ deploy_production_server() {
     --max-instances=${max_instances} --memory=${memory_limit} --region=${cur_region}\
     --set-env-vars POLICY_SCRIPT_URL=${policy_script_url}\
     --set-env-vars CONTAINER_CONFIG=${container_config}\
-    --set-env-vars GOOGLE_CLOUD_PROJECT=${project_id}\
-    --set-env-vars PREVIEW_SERVER_URL=${debug_url} --format=json | jq -r '.status.url')
+    --set-env-vars GOOGLE_CLOUD_PROJECT=${project_id} --format=json | jq -r '.status.url')
 }
 
 deploy_debug_server() {
-  if [[ "$deploy_debug" == "yes" ]]; then
-    echo "Deploying the debug service to ${service_prefix}-debug"
-    read -n 1 -s
-    debug_url=$(gcloud run deploy ${service_prefix}-debug --image=${IMG_URL}\
-      --cpu=1 --allow-unauthenticated --min-instances=1 --region=${cur_region}\
-      --max-instances=1 --memory=256Mi --set-env-vars RUN_AS_PREVIEW_SERVER=true\
-      --set-env-vars CONTAINER_CONFIG=${container_config} --format=json | jq -r '.status.url')
-    deploy_production_server
-  else
-    echo "Skipping debug server deployment."
-    deploy_production_server
-  fi
+  echo "Deploying the debug service to ${service_prefix}-debug"
+  read -n 1 -s
+  debug_url=$(gcloud run deploy ${service_prefix}-debug --image=${IMG_URL}\
+    --cpu=1 --allow-unauthenticated --min-instances=1 --region=${cur_region}\
+    --max-instances=1 --memory=256Mi --set-env-vars RUN_AS_PREVIEW_SERVER=true\
+    --set-env-vars CONTAINER_CONFIG=${container_config} --format=json | jq -r '.status.url')
+}
+
+deployment(){
+   if [[ "$deploy_debug" == "yes" ]]; then
+      deploy_debug_server
+      deploy_production_server
+    else
+      deploy_production_server
+    fi
 }
 
 if [[ "${container_config}" == "${cur_container_config}" &&
@@ -424,12 +426,12 @@ fi
 
 echo "As you wish."
 
-deploy_debug_server
+deployment
 
 echo ""
 echo "Your server deployment is complete."
 echo ""
-echo "Production server test:"
+echo "Production server URL:"
 printf "${prod_url}/healthy"
 echo ""
 exit 0

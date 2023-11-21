@@ -277,6 +277,29 @@ prompt_continue_default_no() {
   done
 }
 
+prompt_debug_server() {
+    while true; do
+        printf "Do you want to deploy a debug server as well? (y/N): "
+        read deploy_debug_answer
+        deploy_debug_answer=$(echo "$deploy_debug_answer" | tr '[:upper:]' '[:lower:]')
+
+        case $deploy_debug_answer in
+            y)
+                deploy_debug="yes"
+                break
+                ;;
+            n | '')
+                deploy_debug="no"
+                break
+                ;;
+            *)
+                echo "Invalid selection. Please enter Y for Yes or N for No."
+                ;;
+        esac
+    done
+}
+
+
 prompt_container_config
 prompt_policy_script_url
 echo "Container Config: ${container_config}"
@@ -295,10 +318,12 @@ choose_plan() {
     b)
       min_instances=2
       max_instances=3
+      prompt_debug_server
       ;;
     c)
       min_instances=3
       max_instances=4
+      prompt_debug_server
       ;;
     custom)
       # Custom configuration; values will be prompted later
@@ -321,6 +346,7 @@ choose_custom_params() {
     prompt_cpu_limit
     prompt_min_instances
     prompt_max_instances
+    prompt_debug_server
 
     echo ""
     echo "Your configured settings are"
@@ -339,7 +365,7 @@ if [[ "$plan_choice" == "custom" ]]; then
     choose_custom_params
 else
     service_prefix="gtm-server"
-    region=$DEFAULT_REGION
+    cur_region=$DEFAULT_REGION
     memory_limit=$DEFAULT_MEMORY
     cpu_limit=$DEFAULT_CPU
     request_timeout=$DEFAULT_REQUEST_TIMEOUT
@@ -352,7 +378,7 @@ deploy_production_server() {
   if [[ "${policy_script_url}" == "''" ]]; then
     policy_script_url=""
   fi
-  echo "Deploying the production service to ${service_prefix}-prod, press any key to begin..."
+  echo "Deploying the production service to ${service_prefix}-prod"
   project_id=$(gcloud config list --format 'value(core.project)')
   read -n 1 -s
   prod_url=$(gcloud run deploy ${service_prefix}-prod --image=${IMG_URL}\
@@ -365,13 +391,18 @@ deploy_production_server() {
 }
 
 deploy_debug_server() {
-  echo "Deploying the debug service to ${service_prefix}-debug, press any key to begin..."
-  read -n 1 -s
-  debug_url=$(gcloud run deploy ${service_prefix}-debug --image=${IMG_URL}\
-    --cpu=1 --allow-unauthenticated --min-instances=1 --region=${cur_region}\
-    --max-instances=1 --memory=256Mi --set-env-vars RUN_AS_PREVIEW_SERVER=true\
-    --set-env-vars CONTAINER_CONFIG=${container_config} --format=json | jq -r '.status.url')
-  deploy_production_server
+  if [[ "$deploy_debug" == "yes" ]]; then
+    echo "Deploying the debug service to ${service_prefix}-debug, press any key to begin..."
+    read -n 1 -s
+    debug_url=$(gcloud run deploy ${service_prefix}-debug --image=${IMG_URL}\
+      --cpu=1 --allow-unauthenticated --min-instances=1 --region=${cur_region}\
+      --max-instances=1 --memory=256Mi --set-env-vars RUN_AS_PREVIEW_SERVER=true\
+      --set-env-vars CONTAINER_CONFIG=${container_config} --format=json | jq -r '.status.url')
+    deploy_production_server
+  else
+    echo "Skipping debug server deployment."
+    deploy_production_server
+  fi
 }
 
 if [[ "${container_config}" == "${cur_container_config}" &&

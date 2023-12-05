@@ -380,6 +380,7 @@ deploy_production_server() {
   fi
   echo "Deploying the production service to ${service_prefix}-prod"
   project_id=$(gcloud config list --format 'value(core.project)')
+  echo "Press any key to continue"
   read -n 1 -s
   prod_url=$(gcloud run deploy ${service_prefix}-prod --image=${IMG_URL}\
     --cpu=${cpu_limit} --allow-unauthenticated --min-instances=${min_instances}\
@@ -391,6 +392,7 @@ deploy_production_server() {
 
 deploy_debug_server() {
   echo "Deploying the debug service to ${service_prefix}-debug"
+  echo "Press any key to continue"
   read -n 1 -s
   debug_url=$(gcloud run deploy ${service_prefix}-debug --image=${IMG_URL}\
     --cpu=1 --allow-unauthenticated --min-instances=1 --region=${cur_region}\
